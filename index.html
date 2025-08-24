@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0a0a16;
+            color: #e0e0ff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.5s ease;
+        }
+        
+        body.light-mode {
+            background-color: #f0f0ff;
+            color: #2a2a4a;
+        }
+        
+        #visualizer-container {
+            flex: 1;
+            padding: 5px;
+        }
+        
+        canvas {
+            display: block;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #controls {
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(10, 10, 22, 0.7);
+            border-top: 1px solid rgba(160, 160, 255, 0.2);
+            transition: opacity 0.3s ease;
+            opacity: 0.9;
+        }
+        
+        body.light-mode #controls {
+            background-color: rgba(240, 240, 255, 0.7);
+            border-top: 1px solid rgba(90, 90, 150, 0.2);
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 120px;
+        }
+        
+        label {
+            font-size: 11px;
+            margin-bottom: 4px;
+            color: #a0a0ff;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        body.light-mode label {
+            color: #5a5a9a;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+            -webkit-appearance: none;
+            background: rgba(160, 160, 255, 0.2);
+            border-radius: 5px;
+            outline: none;
+        }
+        
+        body.light-mode input[type="range"] {
+            background: rgba(90, 90, 150, 0.2);
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #7b68ee;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #9370db;
+        }
+        
+        #mode-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(160, 160, 255, 0.2);
+            border: none;
+            color: #e0e0ff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        body.light-mode #mode-toggle {
+            background: rgba(90, 90, 150, 0.2);
+            color: #2a2a4a;
+        }
+        
+        #controls.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        #toggle-controls {
+            position: absolute;
+            bottom: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(160, 160, 255, 0.3);
+            border: none;
+            color: #e0e0ff;
+            width: 30px;
+            height: 15px;
+            border-radius: 10px 10px 0 0;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        body.light-mode #toggle-controls {
+            background: rgba(90, 90, 150, 0.3);
+            color: #2a2a4a;
+        }
+        
+        .value-display {
+            font-size: 11px;
+            margin-top: 4px;
+            color: #7b68ee;
+            font-weight: 500;
+        }
+        
+        body.light-mode .value-display {
+            color: #5a5a9a;
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <canvas id="visualizer"></canvas>
+    </div>
+    
+    <button id="mode-toggle">🌙</button>
+    <button id="toggle-controls">▲</button>
+    
+    <div id="controls">
+        <div class="control-group">
+            <label for="speed">Speed</label>
+            <input type="range" id="speed" min="0.1" max="2" step="0.1" value="1">
+            <div class="value-display" id="speed-value">1.0</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="complexity">Complexity</label>
+            <input type="range" id="complexity" min="1" max="100" step="1" value="30">
+            <div class="value-display" id="complexity-value">30</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="trail">Trail Effect</label>
+            <input type="range" id="trail" min="0" max="1" step="0.01" value="0.95">
+            <div class="value-display" id="trail-value">0.95</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="color-intensity">Color Intensity</label>
+            <input type="range" id="color-intensity" min="0.1" max="2" step="0.1" value="1">
+            <div class="value-display" id="color-intensity-value">1.0</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('visualizer');
+            const ctx = canvas.getContext('2d');
+            const modeToggle = document.getElementById('mode-toggle');
+            const toggleControls = document.getElementById('toggle-controls');
+            const controls = document.getElementById('controls');
+            
+            // Control elements
+            const speedSlider = document.getElementById('speed');
+            const complexitySlider = document.getElementById('complexity');
+            const trailSlider = document.getElementById('trail');
+            const colorIntensitySlider = document.getElementById('color-intensity');
+            
+            // Value displays
+            const speedValue = document.getElementById('speed-value');
+            const complexityValue = document.getElementById('complexity-value');
+            const trailValue = document.getElementById('trail-value');
+            const colorIntensityValue = document.getElementById('color-intensity-value');
+            
+            // Parameters with defaults
+            let params = {
+                speed: 1,
+                complexity: 30,
+                trail: 0.95,
+                colorIntensity: 1,
+                darkMode: true
+            };
+            
+            // Animation variables
+            let particles = [];
+            let time = 0;
+            let animationId;
+            
+            // Set up the canvas size
+            function resizeCanvas() {
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+            }
+            
+            // Initialize the visualizer
+            function init() {
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+                
+                // Set up event listeners for controls
+                speedSlider.addEventListener('input', function() {
+                    params.speed = parseFloat(this.value);
+                    speedValue.textContent = params.speed.toFixed(1);
+                });
+                
+                complexitySlider.addEventListener('input', function() {
+                    params.complexity = parseInt(this.value);
+                    complexityValue.textContent = params.complexity;
+                    initParticles();
+                });
+                
+                trailSlider.addEventListener('input', function() {
+                    params.trail = parseFloat(this.value);
+                    trailValue.textContent = params.trail.toFixed(2);
+                });
+                
+                colorIntensitySlider.addEventListener('input', function() {
+                    params.colorIntensity = parseFloat(this.value);
+                    colorIntensityValue.textContent = params.colorIntensity.toFixed(1);
+                });
+                
+                modeToggle.addEventListener('click', toggleDarkMode);
+                toggleControls.addEventListener('click', function() {
+                    controls.classList.toggle('hidden');
+                    this.textContent = controls.classList.contains('hidden') ? '▼' : '▲';
+                });
+                
+                // Auto-hide controls after 3 seconds
+                let hideTimeout;
+                function setHideTimeout() {
+                    clearTimeout(hideTimeout);
+                    hideTimeout = setTimeout(() => {
+                        if (!controls.classList.contains('hidden')) {
+                            controls.classList.add('hidden');
+                            toggleControls.textContent = '▼';
+                        }
+                    }, 3000);
+                }
+                
+                document.addEventListener('mousemove', function() {
+                    if (controls.classList.contains('hidden')) {
+                        controls.classList.remove('hidden');
+                        toggleControls.textContent = '▲';
+                    }
+                    setHideTimeout();
+                });
+                
+                setHideTimeout();
+                initParticles();
+                animate();
+            }
+            
+            // Toggle between dark and light mode
+            function toggleDarkMode() {
+                params.darkMode = !params.darkMode;
+                document.body.classList.toggle('light-mode', !params.darkMode);
+                modeToggle.textContent = params.darkMode ? '🌙' : '☀️';
+            }
+            
+            // Initialize particles based on complexity
+            function initParticles() {
+                particles = [];
+                const count = Math.floor(params.complexity / 2);
+                
+                for (let i = 0; i < count; i++) {
+                    particles.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        size: Math.random() * 3 + 1,
+                        speedX: Math.random() * 2 - 1,
+                        speedY: Math.random() * 2 - 1,
+                        color: getRandomColor()
+                    });
+                }
+            }
+            
+            // Generate a random vibrant color
+            function getRandomColor() {
+                const hue = Math.floor(Math.random() * 360);
+                const saturation = 80 + Math.random() * 20;
+                const lightness = 50 + Math.random() * 10;
+                return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            }
+            
+            // Main animation loop
+            function animate() {
+                time += 0.01 * params.speed;
+                
+                // Apply trail effect
+                ctx.fillStyle = params.darkMode ? 'rgba(10, 10, 22, 0.1)' : 'rgba(240, 240, 255, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw and update particles
+                for (let i = 0; i < particles.length; i++) {
+                    const p = particles[i];
+                    
+                    // Draw the particle
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                    
+                    // Update position with some noise for organic movement
+                    p.x += p.speedX + Math.sin(time * 0.5 + i) * 0.5;
+                    p.y += p.speedY + Math.cos(time * 0.5 + i) * 0.5;
+                    
+                    // Wrap around edges
+                    if (p.x > canvas.width) p.x = 0;
+                    if (p.x < 0) p.x = canvas.width;
+                    if (p.y > canvas.height) p.y = 0;
+                    if (p.y < 0) p.y = canvas.height;
+                }
+                
+                // Draw frequency bands (simulated audio response)
+                const bandCount = 20;
+                const bandWidth = canvas.width / bandCount;
+                
+                for (let i = 0; i < bandCount; i++) {
+                    // Simulate audio frequency data with sine waves
+                    const height = (Math.sin(time * 2 + i * 0.2) * 0.5 + 0.5) * 
+                                  (Math.cos(time * 0.7 + i * 0.1) * 0.5 + 0.5) * 
+                                  canvas.height * 0.4 * params.colorIntensity;
+                    
+                    const hue = (time * 20 + i * 10) % 360;
+                    const saturation = 80;
+                    const lightness = 60;
+                    
+                    ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.7)`;
+                    ctx.fillRect(i * bandWidth, canvas.height - height, bandWidth - 2, height);
+                }
+                
+                // Draw center circle with pulsating effect
+                const pulseSize = (Math.sin(time) * 0.5 + 0.5) * 50 + 30;
+                const gradient = ctx.createRadialGradient(
+                    canvas.width / 2, canvas.height / 2, 0,
+                    canvas.width / 2, canvas.height / 2, pulseSize
+                );
+                
+                gradient.addColorStop(0, `hsla(${time * 50 % 360}, 100%, 70%, 0.8)`);
+                gradient.addColorStop(1, `hsla(${(time * 50 + 60) % 360}, 100%, 50%, 0)`);
+                
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, pulseSize, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                animationId = requestAnimationFrame(animate);
+            }
+            
+            // Start everything
+            init();
+        });
+    </script>
+</body>
+</html>
